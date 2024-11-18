@@ -2,9 +2,9 @@ name: Sync Repo with Cloud Storage
 
 on:
   workflow_call:
-    inputs:
-      rclone_config:
-        type: string
+    secrets:
+      RCLONE_CONFIG:
+        required: true
 
 jobs:
   sync:
@@ -28,7 +28,7 @@ jobs:
         uses: AnimMouse/setup-rclone@v1
         with:
           rclone_config: |
-            ${{ github.event.inputs.rclone_config }}
+            ${{ secrets.RCLONE_CONFIG }}
           disable_base64: true
       - run: |
           echo "Syncing with ${{ steps.sync_dir.outputs.DESTINATION_FOLDER }}"
