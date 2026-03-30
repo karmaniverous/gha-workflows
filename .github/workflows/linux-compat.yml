@@ -8,13 +8,18 @@ on:
         required: false
         type: string
         default: 'npm ci'
+      node-versions:
+        description: 'JSON array of Node.js versions to test (default: [20, 22, 24])'
+        required: false
+        type: string
+        default: '[20, 22, 24]'
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20, 22, 24]
+        node-version: ${{ fromJson(inputs.node-versions) }}
 
     steps:
       - uses: actions/checkout@v4
