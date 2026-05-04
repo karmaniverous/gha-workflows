@@ -1,0 +1,151 @@
+# Reusable workflow: npm pack secret-leak check
+#
+# Runs `npm pack --dry-run` for every publishable package in the repo and
+# fails if any tarball would include files matching a forbidden pattern
+# (default: *.local). Handles single-package repos and npm/pnpm workspaces.
+#
+# Usage (caller workflow):
+#
+#   uses: karmaniverous/gha-workflows/.github/workflows/npm-pack-check.yml@main
+#   with:
+#     forbidden-patterns: '*.local'        # pipe-separated globs
+#     node-version: '22'
+#     install-command: 'npm ci'
+#
+# To replicate in another org, copy this file to
+# <org>/gha-workflows/.github/workflows/npm-pack-check.yml and update the
+# caller `uses:` path.
+
+name: npm Pack Check
+
+on:
+  workflow_call:
+    inputs:
+      forbidden-patterns:
+        description: >
+          Pipe-separated glob patterns to reject in packed tarballs
+          (default: *.local)
+        required: false
+        type: string
+        default: '*.local'
+      node-version:
+        description: 'Node.js version (default: 22)'
+        required: false
+        type: string
+        default: '22'
+      install-command:
+        description: 'Command to install dependencies (default: npm ci)'
+        required: false
+        type: string
+        default: 'npm ci'
+
+jobs:
+  pack-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ inputs.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: ${{ inputs.install-command }}
+
+      - name: Check packed files for forbidden patterns
+        shell: bash
+        env:
+          FORBIDDEN_PATTERNS: ${{ inputs.forbidden-patterns }}
+        run: |
+          set -euo pipefail
+
+          # Build an array of forbidden globs from the pipe-separated input.
+          IFS='|' read -ra PATTERNS <<< "$FORBIDDEN_PATTERNS"
+
+          FAILED=0
+
+          # Discover publishable package directories.
+          # For workspaces: find every package.json with a "name" field that
+          # is not marked "private": true. For single-package repos this
+          # naturally returns the root.
+          PACKAGE_DIRS=()
+
+          # Check for npm/pnpm workspaces in root package.json.
+          if node -e "
+            const p = require('./package.json');
+            const ws = p.workspaces || (p.workspaces && p.workspaces.packages);
+            process.exit(ws ? 0 : 1);
+          " 2>/dev/null; then
+            # Use npm to resolve workspace paths (works for both npm and pnpm
+            # workspace definitions read by npm).
+            while IFS= read -r dir; do
+              # Skip private packages — they are never published.
+              if node -e "
+                const p = require('./' + process.argv[1] + '/package.json');
+                process.exit(p.private ? 1 : 0);
+              " "$dir" 2>/dev/null; then
+                PACKAGE_DIRS+=("$dir")
+              fi
+            done < <(npm query .workspace 2>/dev/null | node -e "
+              const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+              d.forEach(w => console.log(w.location));
+            " 2>/dev/null || find . -path ./node_modules -prune -o -name 'package.json' -print \
+              | xargs -I{} node -e "
+                const path = require('path');
+                const dir = path.dirname('{}');
+                if (dir === '.') process.exit(0);
+                const p = require('./' + dir + '/package.json');
+                if (!p.private && p.name) console.log(dir);
+              " 2>/dev/null)
+          else
+            # Single-package repo — check root only if not private.
+            if node -e "
+              const p = require('./package.json');
+              process.exit(p.private ? 1 : 0);
+            " 2>/dev/null; then
+              PACKAGE_DIRS+=(".")
+            fi
+          fi
+
+          if [ ${#PACKAGE_DIRS[@]} -eq 0 ]; then
+            echo "ℹ️  No publishable packages found — skipping."
+            exit 0
+          fi
+
+          for PKG_DIR in "${PACKAGE_DIRS[@]}"; do
+            PKG_NAME=$(node -e "console.log(require('./$PKG_DIR/package.json').name)")
+            echo ""
+            echo "📦 Checking $PKG_NAME ($PKG_DIR)..."
+
+            # npm pack --dry-run prints the file list to stderr and a summary
+            # to stdout. Capture both.
+            PACK_OUTPUT=$(cd "$PKG_DIR" && npm pack --dry-run 2>&1) || true
+
+            for PATTERN in "${PATTERNS[@]}"; do
+              # Match each line of pack output against the forbidden glob.
+              MATCHES=$(echo "$PACK_OUTPUT" | grep -i "$(echo "$PATTERN" | sed 's/\*/.*/g')" || true)
+              if [ -n "$MATCHES" ]; then
+                echo "::error::🚨 $PKG_NAME: forbidden pattern '$PATTERN' matched in packed files:"
+                echo "$MATCHES" | while IFS= read -r line; do
+                  echo "   ❌ $line"
+                done
+                FAILED=1
+              fi
+            done
+
+            if [ $FAILED -eq 0 ]; then
+              echo "   ✅ Clean"
+            fi
+          done
+
+          echo ""
+          if [ $FAILED -ne 0 ]; then
+            echo "::error::Pack check failed — forbidden files would be included in published packages."
+            echo "Fix: add a 'files' whitelist to package.json or add patterns to .npmignore."
+            exit 1
+          fi
+
+          echo "✅ All packages clean."
