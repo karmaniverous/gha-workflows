@@ -2,6 +2,9 @@
 
 Reusable GitHub Actions workflows.
 
+All reusable workflows run on a pinned `ubuntu-24.04` runner by default and
+accept an optional `runs-on` input to override the runner label.
+
 ## Workflows
 
 ### npm-pack-check
@@ -32,6 +35,7 @@ jobs:
 | `forbidden-patterns` | `*.local` | Pipe-separated globs to reject |
 | `node-version` | `22` | Node.js version |
 | `install-command` | `npm ci` | Dependency install command |
+| `runs-on` | `ubuntu-24.04` | Runner label |
 
 **Example with custom patterns:**
 

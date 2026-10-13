@@ -3,6 +3,11 @@ name: Linux Compatibility
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: 'Runner label for all jobs (default: ubuntu-24.04)'
+        required: false
+        type: string
+        default: 'ubuntu-24.04'
       install-command:
         description: 'Command to install dependencies (default: npm ci)'
         required: false
@@ -16,16 +21,16 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     strategy:
       matrix:
         node-version: ${{ fromJson(inputs.node-versions) }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm

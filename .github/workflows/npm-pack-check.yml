@@ -21,6 +21,11 @@ name: npm Pack Check
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: 'Runner label for all jobs (default: ubuntu-24.04)'
+        required: false
+        type: string
+        default: 'ubuntu-24.04'
       forbidden-patterns:
         description: >
           Pipe-separated glob patterns to reject in packed tarballs
@@ -41,13 +46,13 @@ on:
 
 jobs:
   pack-check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js ${{ inputs.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.node-version }}
           cache: npm
