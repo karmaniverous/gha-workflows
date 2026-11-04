@@ -39,6 +39,9 @@ on:
         type: string
         default: 'npm ci'
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   pack-check:
     runs-on: ubuntu-latest
