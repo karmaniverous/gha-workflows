@@ -53,7 +53,14 @@ Syncs files using rclone. Requires `RCLONE_CONFIG` secret.
 
 ### docs
 
-Deploys documentation.
+Builds documentation with `npm run docs` and deploys it to GitHub Pages.
+
+**Inputs (all optional):**
+
+| Input | Default | Description |
+| --- | --- | --- |
+| `node-version` | `24` | Node.js version |
+| `runs-on` | `ubuntu-24.04` | Runner label |
 
 ### jekyll-deploy
 
