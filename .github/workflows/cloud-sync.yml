@@ -2,17 +2,23 @@ name: Sync Repo with Cloud Storage
 
 on:
   workflow_call:
+    inputs:
+      runs-on:
+        description: 'Runner label for all jobs (default: ubuntu-24.04)'
+        required: false
+        type: string
+        default: 'ubuntu-24.04'
     secrets:
       RCLONE_CONFIG:
         required: true
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
 
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Determine Sync Directory
         id: sync_dir
